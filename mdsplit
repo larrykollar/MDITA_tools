@@ -1,0 +1,237 @@
+#!/usr/bin/awk -f
+
+# Splits a large Markdown file into topics
+# and creates a bookmap for use with LwDITA.
+# If the file starts with a YAML block, the
+# block gets printed as a keys file.
+#
+# Assumes a POSIX-ish system with awk and test available
+#
+# Usage: awk -f [me] [-v var=value] bigfile.md
+#	 var:
+#		outdir - output directory (./out)
+#		keyfilename - keys file (keys.xml)
+#		bookfilename - book file (book.ditamap)
+#		maptitle - title/booktitle ("User Guide")
+#		bookdtd - bookmap DTD (standard OASIS DTD)
+#		mapdtd - map DTD (standard OASIS DTD)
+#		usemap - build generic (chapter?) map instead of bookmap (0)
+#
+
+BEGIN {
+	if(!keyfilename)  keyfilename  = "keys.xml";
+	if(!bookfilename) bookfilename = "book.ditamap";
+	if(!outdir)       outdir       = "out";
+	if(!maptitle)     maptitle     = "User Guide";
+	if(!bookdtd)      bookdtd      = "<!DOCTYPE bookmap PUBLIC \"-//OASIS//DTD DITA BookMap//EN\" \"bookmap.dtd\" [ ]>";
+	if(!mapdtd)       mapdtd       = "<!DOCTYPE map PUBLIC \"-//OASIS//DTD DITA Map//EN\" \"map.dtd\" [ ]>";
+	if(!usemap)       usemap       = 0;
+
+	dirtest = "test -d " outdir;
+	mkdir = "mkdir " outdir;
+
+	system( dirtest "||" mkdir ); # create the output directory if needed
+
+	# tab-delimited entries to build bookmap (level [tab] filename)
+	entries[1] = ""; entry = 1;
+	metadata[0] = 0; # number of metadata entries
+
+	inmeta = 0;
+	toodeep = 0;
+}
+
+# keep metadata (print at end as a key file)
+# * Metadata has the following format:
+# *
+# *     key: value
+# *
+# * This is true for all known YAML usage (Jekyll, MultiMarkdown, LwDITA).
+
+NR == 1 && /^---/ {
+	inmeta = 1;
+	next;
+}
+
+/^---/ {
+	inmeta = 0;
+	next;
+}
+
+inmeta {
+	split( $0, a, /[:blank:]*:[:blank:]*/ );
+	metadata[a[1]] = a[2];
+	++metadata[0]; # count of keys detected
+	next;
+}
+
+# split Markdown files at headings
+# * Special handling for headings:
+# * We recognize the Pandoc ID/class tag
+# * (e.g. {.class #id}.
+# * Two specific class tags, `.section` and `.example`,
+# * require special handling for LwDITA; they denote
+# * subsections of a topic and thus need to stay with
+# * the current topic/outfile being processed.
+
+/^#+ / && $0 !~ /\.section/ && $0 !~ /\.example/ {
+	if( outfile ) close( outfile );
+
+	# what level?
+	if( $0 ~ /^# / ) lvl = 1;
+	if( $0 ~ /^## / ) lvl = 2;
+	if( $0 ~ /^### / ) lvl = 3;
+	if( $0 ~ /^#### / ) lvl = 4;
+	if( $0 ~ /^##### / ) lvl = 5;
+
+	# seriously... if you have 6+ levels, you need a re-think.
+	if( $0 ~ /^######+ / ) {
+		lvl = 5;
+		if( !toodeep ) {
+			print "Level 6+ heading detected, flattening to level 5.";
+			print "Please reconsider your document's structure and re-run."
+			toodeep = 1;
+		}
+	}
+
+	sub( /#+ /, "" ); # we're only using one hash in each topic
+	title = $0;
+
+	sub( /[:blank:]+{.*$/, "" ); # save ID marker in title but ditch in $0 for slugify
+	outfileroot = uniq_file( $0 ) ".md";
+	outfile = outdir "/" outfileroot;
+
+	print "#", title > outfile;
+	entries[entry] = lvl "	" outfileroot; ++entry;
+	next;
+}
+
+# sub-headings (sections or examples)
+/^##+ / && ($0 ~ /\{.*\.section/ || $0 ~ /\{.*\.example/) {
+	sub( /^##+/, "##" );
+	print >> outfile;
+	next;
+}
+
+{
+	# throw away blank lines & anything else between metadata and first heading
+	if(entry > 1) print $0 >> outfile;
+	next;
+}
+
+END {
+	if( outfile ) close( outfile );
+	# print metadata
+	if( metadata[0] ) {
+		outfile = outdir "/" keyfilename;
+		print "# keys {.concept}\n" > outfile;
+		for( i in metadata ) {
+			print "<p><ph id=\"" i "\">" metadata[i] "</ph></p>" >> outfile;
+		}
+		close(outfile);
+	}
+
+	# print bookmap/map
+	if( entry > 1 ) {
+		outfile = outdir "/" bookfilename;
+		print "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" >outfile;
+		if( usemap ) {
+			print mapdtd >> outfile;
+			print "<map>" >>outfile;
+			print "	<title>" maptitle "</title>" >>outfile;
+		} else {
+			print bookdtd >> outfile;
+			print "<bookmap>" >>outfile;
+			print "	<booktitle>" >>outfile;
+			print "   <mainbooktitle>" maptitle "</mainbooktitle>" >>outfile;
+			print " </booktitle>" >>outfile;
+			if( metadata[0] )
+				print "<keydef keys=\"product\" href=\"keys.xml\"/>" >>outfile;
+			print "	<frontmatter>\n	<booklists>\n	<toc toc=\"no\"/>\n</booklists>\n</frontmatter>" >>outfile;
+		}
+
+		chaps = 0;
+		lvl = 0;
+		for( i=1; i < entry; ++i ) {
+			split( entries[i], a, /	/ ); # split on tab
+
+			if( a[1] == 1 ) {
+				for( j = 2; j <= lvl; ++j ) print "</topicref>" >>outfile;
+				if( chaps ) {
+				   if( !usemap ) {
+					   print "</chapter>" >>outfile;
+				   } else {
+				       print "</topicref>" >>outfile;
+				   }
+				++chaps;
+				lvl = 1;
+				if( chaps ) {
+					print "<chapter href=\"" a[2] "\" format=\"markdown\">" >>outfile;
+				} else {
+					print "<topicref href=\"" a[2] "\" format=\"markdown\">" >>outfile;
+				}
+			} else {
+				for( j = a[1]; j <= lvl; ++j ) print "</topicref>" >>outfile;
+				lvl = a[1];
+				print "<topicref href=\"" a[2] "\" format=\"markdown\">" >>outfile;
+			}
+		}
+		for( j = 2; j <= lvl; ++j ) print "</topicref>" >>outfile;
+		if( chaps ) {
+			if( !usemap ) {
+				print "</chapter>" >>outfile;
+			} else {
+				print "</topicref>" >>outfile;
+			}
+		if( usemap ) {
+			print "</map>" >>outfile;
+		} else {
+			print "</bookmap>" >>outfile;
+		}
+		close(outfile);
+	}
+}
+
+function slugify( s,   s1 ) {
+	s1 = tolower(s);
+	sub( / {.*/, "", s1 ); # dump type marker
+	gsub( / /, "_", s1 );
+	gsub( /[\-:;!/&'?]/, "", s1 );
+	gsub( /_the_/, "_", s1 );
+	gsub( /^the_/, "", s1 );
+	gsub( /_for_/, "_", s1 );
+	gsub( /_as_/, "_", s1 );
+	gsub( /^to_/, "", s1 );
+	gsub( /_to_/, "_", s1 );
+	gsub( /_by_/, "_", s1 );
+	gsub( /_a_/, "_", s1 );
+	gsub( /_an_/, "_", s1 );
+	gsub( /_is_/, "_", s1 );
+	gsub( /^a_/, "", s1 );
+	gsub( /_+/, "_", s1 ); # collapse multiple underscores
+	sub( /_+$/, "", s1 ); # remove trailing underscores
+
+	return s1;
+}
+
+# scans output directory for matching files
+# returns unique file root for each topic
+function uniq_file( name,    f, sys, x ) {
+
+	f = slugify(name);
+
+	sys = "test -f " outdir "/" f ".md";
+
+	if( system(sys) ) {
+		# return val >0 means filename doesn't exist, so it's unique
+		return f;
+	} else {
+		x = 0;
+		while(1) {
+			++x;
+			sys = "test -f " outdir "/" f "_" x ".md";
+			if( system(sys) ) break;
+		}
+		return f "_" x;
+	}
+}
+# vim: ts=4 sw=4 :

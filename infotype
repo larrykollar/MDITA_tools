@@ -1,0 +1,157 @@
+#!/usr/bin/awk -f
+
+# Analyze a Markdown (MDITA) file
+# and tag it with a topic type
+# based on its content. Patterns
+# and weights can be adjusted to suit.
+#
+# Usage: awk -f [me] [-v var=value] file.md
+#	var:
+#		DEBUG - spit out debug msgs if true (0)
+#		generic - default topic type (topic)
+
+BEGIN {
+	# set up the weight table (see end of script)
+	numtests = weight_setup();
+	generic = ""; # default type if no clear winner (blank means type "topic")
+
+	if( !DEBUG ) DEBUG = 0;
+}
+
+FILENAME != oldfile { # new file incoming
+	type = get_weight();
+	if( !type ) type = generic;
+	if( type && oldfile != "" ) {
+		sysstr = parse_hdg( hdg1, oldfile, type );
+		if( DEBUG ) print "###parse_hdg returns:", sysstr;
+		if( sysstr ) system( sysstr );
+	}
+	hdg1 = "";
+	delete results;
+	delete tests;
+	oldfile = FILENAME;
+}
+
+/^# / {
+	# save the heading (but let the pipeline test it)
+	hdg1 = $0;
+}
+
+{
+	# run tests on each line
+	# skip tests that have already passed
+	for( i=1; i<=numtests; ++i ) {
+		if( !tests[i] && $0 ~ weight[i,"pattern"] ) {
+			results[weight[i,"topictype"]] += weight[i,"weight"];
+			tests[i] = 1; # mark test as passed
+		}
+	}
+	next;
+}
+
+END {
+	type = get_weight();
+	if( !type ) type = generic;
+	if( type && oldfile ) {
+		sysstr = parse_hdg( hdg1, oldfile, type );
+		if( DEBUG ) print "###parse_hdg returns:", sysstr;
+		if( sysstr ) system( sysstr );
+	}
+}
+
+# # # # functions follow # # # #
+
+# returns the topic type with the highest score
+# return can be blank, in which case use the generic global
+# ties go to the first type to be checked
+function get_weight(   win, hiscore, t) {
+	# uses global results array
+	win = "";
+	hiscore = 0;
+	for( t in results ) {
+		if( results[t] > hiscore ) {
+			win = t;
+			hiscore = results[t];
+		}
+	}
+	if( DEBUG ) print "###get_weight: hiscore=" hiscore "; type=" win;
+	return win;
+}
+
+
+# returns a command line to add the proper topic type to the heading
+# return can be blank, in which case don't do anything
+function parse_hdg( hd, fn, newtype,   str ) {
+	# skip if the heading already has a topic type or outputclass
+	if( hd ~ /{.*\.[a-z]/ )
+		return "";
+
+	# check for ID construct: {#idname}
+	if( hd ~ /{.*#[a-zA-Z]/ ) {
+		str = "sed -i -e '/^# /s/{/{." newtype " /' " fn;
+		return str;
+	}
+
+	# default, no ID/outputclass
+	str = "sed -i -e '/^# /s/$/ {." newtype "}/' " fn;
+	return str;
+}
+			
+# You can add your own rules here
+function weight_setup(   w ) {
+	# format: pattern, topic type, weight
+	# returns: number of entries
+
+	w = 0;
+
+	# bullet list = concept (maybe)
+	weight[1,"pattern"] = "^[ \t]*\\* +";
+	weight[1,"topictype"] = "concept";
+	weight[1,"weight"] = 0.5;
+	++w;
+
+	# numlist = task
+	weight[2,"pattern"] = "^[ \t]*[0-9]+\. +";
+	weight[2,"topictype"] = "task";
+	weight[2,"weight"] = 1.5;
+	++w;
+	
+	# first word of title ending in "ing" = task
+	weight[3,"pattern"] = "^# +[^ ]*ing ";
+	weight[3,"topictype"] = "task";
+	weight[3,"weight"] = 0.5;
+	++w;
+	
+	# deflist = reference
+	weight[4,"pattern"] = "^ *:  *";
+	weight[4,"topictype"] = "reference";
+	weight[4,"weight"] = 1.0;
+	++w;
+	
+	# table = lean toward reference
+	weight[5,"pattern"] = "^\\| ";
+	weight[5,"topictype"] = "reference";
+	weight[5,"weight"] = 0.5;
+	++w;
+	
+	# "About" in the heading is usually a concept
+	weight[6,"pattern"] = "^# .*[Aa]bout";
+	weight[6,"topictype"] = "concept";
+	weight[6,"weight"] = 1.5;
+	++w;
+	
+	# "Commands" in the heading is usually a reference
+	weight[7,"pattern"] = "^# .*[Cc]ommands";
+	weight[7,"topictype"] = "reference";
+	weight[7,"weight"] = 1.5;
+	++w;
+
+	# "Syntax" at the beginning of a paragraph is prob. a reference
+	weight[8,"pattern"] = "^Syntax:";
+	weight[8,"topictype"] = "reference";
+	weight[8,"weight"] = 1.0;
+	++w;
+
+	if( DEBUG ) print "###weight_setup:", w, "tests read.";
+	return w;
+}
