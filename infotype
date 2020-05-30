@@ -13,8 +13,8 @@
 BEGIN {
 	# set up the weight table (see end of script)
 	numtests = weight_setup();
-	generic = ""; # default type if no clear winner (blank means type "topic")
 
+	if( !generic ) generic = ""; # default type if no clear winner (blank means type "topic")
 	if( !DEBUG ) DEBUG = 0;
 }
 
@@ -102,54 +102,61 @@ function weight_setup(   w ) {
 	# format: pattern, topic type, weight
 	# returns: number of entries
 
-	w = 0;
+	w = 1;
 
 	# bullet list = concept (maybe)
-	weight[1,"pattern"] = "^[ \t]*\\* +";
-	weight[1,"topictype"] = "concept";
-	weight[1,"weight"] = 0.5;
+	weight[w,"pattern"] = "^[ \t]*\\* +";
+	weight[w,"topictype"] = "concept";
+	weight[w,"weight"] = 0.5;
 	++w;
 
 	# numlist = task
-	weight[2,"pattern"] = "^[ \t]*[0-9]+\. +";
-	weight[2,"topictype"] = "task";
-	weight[2,"weight"] = 1.5;
+	weight[w,"pattern"] = "^[ \t]*[0-9]+\\. +";
+	weight[w,"topictype"] = "task";
+	weight[w,"weight"] = 1.5;
 	++w;
 	
 	# first word of title ending in "ing" = task
-	weight[3,"pattern"] = "^# +[^ ]*ing ";
-	weight[3,"topictype"] = "task";
-	weight[3,"weight"] = 0.5;
-	++w;
+	# doesn't always seem to help
+	# weight[w,"pattern"] = "^# +[^ ]*ing ";
+	# weight[w,"topictype"] = "task";
+	# weight[w,"weight"] = 0.5;
+	# ++w;
 	
 	# deflist = reference
-	weight[4,"pattern"] = "^ *:  *";
-	weight[4,"topictype"] = "reference";
-	weight[4,"weight"] = 1.0;
+	weight[w,"pattern"] = "^ *:  *";
+	weight[w,"topictype"] = "reference";
+	weight[w,"weight"] = 1.0;
 	++w;
 	
 	# table = lean toward reference
-	weight[5,"pattern"] = "^\\| ";
-	weight[5,"topictype"] = "reference";
-	weight[5,"weight"] = 0.5;
+	weight[w,"pattern"] = "^\\| ";
+	weight[w,"topictype"] = "reference";
+	weight[w,"weight"] = 0.5;
+	++w;
+	
+	# tables might be HTML
+	weight[w,"pattern"] = "<table";
+	weight[w,"topictype"] = "reference";
+	weight[w,"weight"] = 0.5;
 	++w;
 	
 	# "About" in the heading is usually a concept
-	weight[6,"pattern"] = "^# .*[Aa]bout";
-	weight[6,"topictype"] = "concept";
-	weight[6,"weight"] = 1.5;
+	weight[w,"pattern"] = "^# .*[Aa]bout";
+	weight[w,"topictype"] = "concept";
+	weight[w,"weight"] = 1.5;
 	++w;
 	
 	# "Commands" in the heading is usually a reference
-	weight[7,"pattern"] = "^# .*[Cc]ommands";
-	weight[7,"topictype"] = "reference";
-	weight[7,"weight"] = 1.5;
+	weight[w,"pattern"] = "^# .*[Cc]ommands";
+	weight[w,"topictype"] = "reference";
+	weight[w,"weight"] = 1.5;
 	++w;
 
 	# "Syntax" at the beginning of a paragraph is prob. a reference
-	weight[8,"pattern"] = "^Syntax:";
-	weight[8,"topictype"] = "reference";
-	weight[8,"weight"] = 1.0;
+	weight[w,"pattern"] = "^Syntax:";
+	weight[w,"topictype"] = "reference";
+	weight[w,"weight"] = 1.0;
 	++w;
 
 	if( DEBUG ) print "###weight_setup:", w, "tests read.";

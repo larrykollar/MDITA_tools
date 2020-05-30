@@ -162,6 +162,7 @@ END {
 				   } else {
 				       print "</topicref>" >>outfile;
 				   }
+			    }
 				++chaps;
 				lvl = 1;
 				if( chaps ) {
@@ -182,6 +183,7 @@ END {
 			} else {
 				print "</topicref>" >>outfile;
 			}
+		}
 		if( usemap ) {
 			print "</map>" >>outfile;
 		} else {
@@ -195,7 +197,7 @@ function slugify( s,   s1 ) {
 	s1 = tolower(s);
 	sub( / {.*/, "", s1 ); # dump type marker
 	gsub( / /, "_", s1 );
-	gsub( /[\-:;!/&'?]/, "", s1 );
+	gsub( /[\-\(\):;!\/&'?]/, "", s1 );
 	gsub( /_the_/, "_", s1 );
 	gsub( /^the_/, "", s1 );
 	gsub( /_for_/, "_", s1 );
@@ -203,10 +205,10 @@ function slugify( s,   s1 ) {
 	gsub( /^to_/, "", s1 );
 	gsub( /_to_/, "_", s1 );
 	gsub( /_by_/, "_", s1 );
+	gsub( /^a_/, "", s1 );
 	gsub( /_a_/, "_", s1 );
 	gsub( /_an_/, "_", s1 );
 	gsub( /_is_/, "_", s1 );
-	gsub( /^a_/, "", s1 );
 	gsub( /_+/, "_", s1 ); # collapse multiple underscores
 	sub( /_+$/, "", s1 ); # remove trailing underscores
 
