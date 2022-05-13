@@ -165,7 +165,7 @@ END {
 			    }
 				++chaps;
 				lvl = 1;
-				if( chaps ) {
+				if( chaps && !usemap ) {
 					print "<chapter href=\"" a[2] "\" format=\"markdown\">" >>outfile;
 				} else {
 					print "<topicref href=\"" a[2] "\" format=\"markdown\">" >>outfile;
@@ -198,6 +198,7 @@ function slugify( s,   s1 ) {
 	sub( / {.*/, "", s1 ); # dump type marker
 	gsub( / /, "_", s1 );
 	gsub( /[\-\(\):;!\/&'?]/, "", s1 );
+	gsub( /\*/, "_", s1 );
 	gsub( /_the_/, "_", s1 );
 	gsub( /^the_/, "", s1 );
 	gsub( /_for_/, "_", s1 );
@@ -209,8 +210,8 @@ function slugify( s,   s1 ) {
 	gsub( /_a_/, "_", s1 );
 	gsub( /_an_/, "_", s1 );
 	gsub( /_is_/, "_", s1 );
-	gsub( /_+/, "_", s1 ); # collapse multiple underscores
-	sub( /_+$/, "", s1 ); # remove trailing underscores
+	gsub( /__*/, "_", s1 ); # collapse multiple underscores
+	sub( /_*$/, "", s1 ); # remove trailing underscores
 
 	return s1;
 }
