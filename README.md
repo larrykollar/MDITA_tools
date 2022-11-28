@@ -1,6 +1,6 @@
 # MDITA tools
 
-Awk scripts to set up Markdown documents for Lightweight DITA,
+Scripts to set up Markdown documents for Lightweight DITA,
 either as standalone MDITA topics or as a stepping stone to full-weight DITA.
 They are also useful to convert word processor documents,
 first by exporting or converting to Markdown.
@@ -14,6 +14,12 @@ Currently, the utilities are:
    to MDITA files, based on their content.
    You can easily modify or expand the default rules,
    which are based on regular expressions.
+
+   **Note**: files are edited in place, so make a backup before running this script.
+
+*  *fixext*: A shell script to change `.md` extensions to `.dita`,
+   and fix any cross-references.
+   Run this after uplifting to full DITA.
 
    **Note**: files are edited in place, so make a backup before running this script.
 
@@ -99,4 +105,14 @@ The `pattern` in each rule is a regular expression.
 
 If you discover patterns that could be generally useful,
 please put them in an issue or pull request.
+
+## Using *fixext*
+
+After using DITA-OT to convert your MDITA book to DITA,
+use *fixext* to rename the topic extensions from `.md` to `.dita`.
+The script makes a pass through the bookmaps and each topic,
+fixing cross-references to use the corrected file names.
+
+*Future*: If needed, use the `-r` *string* option to specify a string
+to be removed from each file name (and cross-reference).
 
